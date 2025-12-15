@@ -1,29 +1,46 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { generateResume } from '@/lib/ai/openrouter'
-import type { ResumeData } from '@/lib/types'
+import { NextRequest, NextResponse } from 'next/server';
+import { generateResumeContent, resumeSystemPrompt } from '@/lib/openrouter';
 
 export async function POST(request: NextRequest) {
   try {
-    const resumeData: ResumeData = await request.json()
+    const { messages, useReasoning = true } = await request.json();
 
-    // Validate required fields
-    if (!resumeData.personalInfo.fullName || !resumeData.personalInfo.email) {
-      return NextResponse.json(
-        { error: 'Full name and email are required' },
-        { status: 400 }
-      )
-    }
+    // Add system prompt if it's the first message
+    const enhancedMessages = messages.length === 1 
+      ? [{ role: 'system', content: resumeSystemPrompt }, ...messages]
+      : messages;
 
-    // Generate resume using AI
-    const generatedResume = await generateResume(resumeData)
-
-    return NextResponse.json(generatedResume)
-  } catch (error) {
-    console.error('Error in generate-resume API:', error)
+    const aiResponse = await generateResumeContent(enhancedMessages, useReasoning);
     
+    // Check if the response contains JSON
+    const responseText = aiResponse.content;
+    let jsonResponse = null;
+    
+    // Try to extract JSON from the response
+    try {
+      // Look for JSON pattern in the response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonResponse = JSON.parse(jsonMatch[0]);
+      }
+    } catch (error) {
+      console.error('Error parsing JSON from AI response:', error);
+    }
+    
+    return NextResponse.json({
+      message: responseText,
+      reasoning_details: aiResponse.reasoning_details,
+      json_data: jsonResponse, // Add parsed JSON separately
+      role: 'assistant'
+    });
+  } catch (error) {
+    console.error('Chat API error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate resume', details: (error as Error).message },
+      { 
+        error: 'Failed to process chat request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
-    )
+    );
   }
 }

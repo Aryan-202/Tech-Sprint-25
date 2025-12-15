@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import ResumePreview from '@/components/ResumePreview';
 import { Message, ResumeData } from '@/types';
+import { parseAIResponse } from '@/lib/resume-parser';
 
 const initialResumeData: ResumeData = {
   personalInfo: {
@@ -11,6 +12,9 @@ const initialResumeData: ResumeData = {
     email: '',
     phone: '',
     location: '',
+    linkedin: '',
+    github: '',
+    portfolio: ''
   },
   summary: '',
   experience: [],
@@ -20,7 +24,7 @@ const initialResumeData: ResumeData = {
   certifications: [],
 };
 
-export default function Home() {
+export default function ResumePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -32,52 +36,51 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [resumeData, setResumeData] = useState<ResumeData>(initialResumeData);
 
-  // Try to load saved data from localStorage
+  // Load saved data from localStorage
   useEffect(() => {
-    const savedMessages = localStorage.getItem('resumeChatMessages');
-    const savedResumeData = localStorage.getItem('resumeData');
-    
-    if (savedMessages) {
-      setMessages(JSON.parse(savedMessages));
-    }
-    if (savedResumeData) {
-      setResumeData(JSON.parse(savedResumeData));
+    try {
+      const savedMessages = localStorage.getItem('resumeChatMessages');
+      const savedResumeData = localStorage.getItem('resumeData');
+      
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        // Convert date strings back to Date objects
+        setMessages(parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })));
+      }
+      if (savedResumeData) {
+        setResumeData(JSON.parse(savedResumeData));
+      }
+    } catch (error) {
+      console.error('Error loading saved data:', error);
     }
   }, []);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('resumeChatMessages', JSON.stringify(messages));
-    localStorage.setItem('resumeData', JSON.stringify(resumeData));
+    try {
+      localStorage.setItem('resumeChatMessages', JSON.stringify(messages));
+      localStorage.setItem('resumeData', JSON.stringify(resumeData));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
   }, [messages, resumeData]);
 
-  const parseAIResponse = (content: string) => {
-    try {
-      // Check if the response contains JSON
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.resumeData) {
-          setResumeData(parsed.resumeData);
-          return "I've updated your resume with the information you provided. Check the preview on the right!";
-        }
-      }
-      return content;
-    } catch (error) {
-      return content;
-    }
-  };
-
   const handleSendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || isLoading) return;
+
+    setIsLoading(true);
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content,
+      content: content,
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
 
     try {
       const response = await fetch('/api/chat', {
@@ -86,41 +89,59 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [...messages.map(m => ({ role: m.role, content: m.content })), userMessage],
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           useReasoning: true,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        const errorText = await response.text();
+        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
       
-      const processedContent = parseAIResponse(data.message);
+      // Parse the AI response
+      const parsed = parseAIResponse(data.message);
       
+      // Add AI message to chat
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: processedContent,
+        content: parsed.message,
         timestamp: new Date(),
         reasoning_details: data.reasoning_details,
       };
-
+      
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Update resume data if available
+      if (parsed.resumeData) {
+        setResumeData(prev => ({
+          ...prev,
+          personalInfo: { ...prev.personalInfo, ...parsed.resumeData!.personalInfo },
+          summary: parsed.resumeData!.summary || prev.summary,
+          experience: [...prev.experience, ...(parsed.resumeData!.experience || [])],
+          education: [...prev.education, ...(parsed.resumeData!.education || [])],
+          skills: [...prev.skills, ...(parsed.resumeData!.skills || [])],
+          projects: [...prev.projects, ...(parsed.resumeData!.projects || [])],
+          certifications: [...prev.certifications, ...(parsed.resumeData!.certifications || [])]
+        }));
+      }
+      
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "I'm sorry, I encountered an error. Please try again.",
+        content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleReset = () => {
     if (confirm('Are you sure you want to start a new resume? This will clear all current progress.')) {
@@ -153,14 +174,12 @@ export default function Home() {
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 AI Assistant Online
               </div>
-              <a 
-                href="https://openrouter.ai/models/allenai/olmo-3-32b-think" 
-                target="_blank" 
-                rel="noopener noreferrer"
+              <button
+                onClick={handleReset}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
               >
-                Powered by OpenRouter
-              </a>
+                New Resume
+              </button>
             </div>
           </div>
         </div>
@@ -168,7 +187,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-200px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[600px]">
           {/* Left Panel - Chat */}
           <div className="h-full">
             <ChatInterface
@@ -195,19 +214,19 @@ export default function Home() {
             <div className="p-4 bg-blue-50 rounded-lg">
               <h4 className="font-medium text-blue-800 mb-2">Be Specific</h4>
               <p className="text-sm text-blue-700">
-                Mention specific achievements, numbers, and results from your experience
+                Example: "I increased sales by 30% by implementing a new CRM system"
               </p>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">Provide Details</h4>
+              <h4 className="font-medium text-green-800 mb-2">Provide Structure</h4>
               <p className="text-sm text-green-700">
-                Share your skills, projects, certifications, and career goals
+                Share: Job titles, companies, dates, responsibilities, and achievements
               </p>
             </div>
             <div className="p-4 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">Ask for Help</h4>
+              <h4 className="font-medium text-purple-800 mb-2">Ask Directly</h4>
               <p className="text-sm text-purple-700">
-                Ask the AI to improve specific sections or suggest better wording
+                Try: "Generate a resume for a software engineer with 5 years of experience"
               </p>
             </div>
           </div>

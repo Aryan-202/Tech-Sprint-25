@@ -6,58 +6,63 @@ export interface Message {
   reasoning_details?: any;
 }
 
-export interface ResumeData {
-  personalInfo: {
-    name: string;
-    email: string;
-    phone: string;
-    location: string;
-    linkedin?: string;
-    github?: string;
-    portfolio?: string;
-  };
-  summary: string;
-  experience: {
-    id: string;
-    title: string;
-    company: string;
-    location: string;
-    startDate: string;
-    endDate: string;
-    description: string[];
-    achievements: string[];
-  }[];
-  education: {
-    id: string;
-    degree: string;
-    institution: string;
-    location: string;
-    startDate: string;
-    endDate: string;
-    gpa?: string;
-    relevantCourses?: string[];
-  }[];
-  skills: {
-    category: string;
-    items: string[];
-  }[];
-  projects: {
-    id: string;
-    name: string;
-    description: string;
-    technologies: string[];
-    link?: string;
-  }[];
-  certifications: {
-    id: string;
-    name: string;
-    issuer: string;
-    date: string;
-  }[];
+export interface PersonalInfo {
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
 }
 
-export interface ChatState {
-  messages: Message[];
-  isLoading: boolean;
-  resumeData: ResumeData;
+export interface ExperienceItem {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  achievements: string[];
+}
+
+export interface EducationItem {
+  id: string;
+  degree: string;
+  institution: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  gpa?: string;
+  relevantCourses?: string[];
+}
+
+export interface SkillCategory {
+  category: string;
+  items: string[];
+}
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  description: string;
+  technologies: string[];
+  link?: string;
+}
+
+export interface CertificationItem {
+  id: string;
+  name: string;
+  issuer: string;
+  date: string;
+}
+
+export interface ResumeData {
+  personalInfo: PersonalInfo;
+  summary: string;
+  experience: ExperienceItem[];
+  education: EducationItem[];
+  skills: SkillCategory[];
+  projects: ProjectItem[];
+  certifications: CertificationItem[];
 }
