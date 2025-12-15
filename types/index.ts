@@ -66,3 +66,13 @@ export interface ResumeData {
   projects: ProjectItem[];
   certifications: CertificationItem[];
 }
+
+export interface MarkdownResumeResponse {
+  markdown: string;
+  filename: string;
+}
+
+export interface DownloadResumeRequest {
+  markdown: string;
+  filename?: string;
+}
