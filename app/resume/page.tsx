@@ -1,247 +1,100 @@
-'use client';
+import Link from 'next/link'
+import { Sparkles, FileText, Zap, Shield } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { SignInButton } from '@/components/SignInButton'
 
-import { useState, useEffect, useCallback } from 'react';
-import ChatInterface from '@/components/ChatInterface';
-import ResumePreview from '@/components/ResumePreview';
-import { Message, ResumeData } from '@/types';
-import { parseAIResponse } from '@/lib/resume-parser';
-
-const initialResumeData: ResumeData = {
-  personalInfo: {
-    name: '',
-    email: '',
-    phone: '',
-    location: '',
-    linkedin: '',
-    github: '',
-    portfolio: ''
-  },
-  summary: '',
-  experience: [],
-  education: [],
-  skills: [],
-  projects: [],
-  certifications: [],
-};
-
-export default function ResumePage() {
-  const [messages, setMessages] = useState<Message[]>([
+export default function HomePage() {
+  const features = [
     {
-      id: '1',
-      role: 'assistant',
-      content: "Hello! I'm your AI Resume Assistant. Let's create an amazing resume together. What field are you in, and what kind of job are you targeting?",
-      timestamp: new Date(),
+      icon: <Sparkles className="h-8 w-8" />,
+      title: 'AI-Powered Generation',
+      description: 'Get professionally crafted resumes using advanced AI algorithms'
     },
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [resumeData, setResumeData] = useState<ResumeData>(initialResumeData);
-
-  // Load saved data from localStorage
-  useEffect(() => {
-    try {
-      const savedMessages = localStorage.getItem('resumeChatMessages');
-      const savedResumeData = localStorage.getItem('resumeData');
-      
-      if (savedMessages) {
-        const parsedMessages = JSON.parse(savedMessages);
-        // Convert date strings back to Date objects
-        setMessages(parsedMessages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })));
-      }
-      if (savedResumeData) {
-        setResumeData(JSON.parse(savedResumeData));
-      }
-    } catch (error) {
-      console.error('Error loading saved data:', error);
+    {
+      icon: <FileText className="h-8 w-8" />,
+      title: 'Multiple Templates',
+      description: 'Choose from various professional resume templates'
+    },
+    {
+      icon: <Zap className="h-8 w-8" />,
+      title: 'Fast & Efficient',
+      description: 'Generate a complete resume in under 2 minutes'
+    },
+    {
+      icon: <Shield className="h-8 w-8" />,
+      title: 'Privacy Focused',
+      description: 'Your data is never stored or shared with third parties'
     }
-  }, []);
-
-  // Save data to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('resumeChatMessages', JSON.stringify(messages));
-      localStorage.setItem('resumeData', JSON.stringify(resumeData));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  }, [messages, resumeData]);
-
-  const handleSendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return;
-
-    setIsLoading(true);
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: content,
-      timestamp: new Date(),
-    };
-
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          useReasoning: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      // Parse the AI response
-      const parsed = parseAIResponse(data.message);
-      
-      // Add AI message to chat
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: parsed.message,
-        timestamp: new Date(),
-        reasoning_details: data.reasoning_details,
-      };
-      
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // Update resume data if available
-      if (parsed.resumeData) {
-        setResumeData(prev => ({
-          ...prev,
-          personalInfo: { ...prev.personalInfo, ...parsed.resumeData!.personalInfo },
-          summary: parsed.resumeData!.summary || prev.summary,
-          experience: [...prev.experience, ...(parsed.resumeData!.experience || [])],
-          education: [...prev.education, ...(parsed.resumeData!.education || [])],
-          skills: [...prev.skills, ...(parsed.resumeData!.skills || [])],
-          projects: [...prev.projects, ...(parsed.resumeData!.projects || [])],
-          certifications: [...prev.certifications, ...(parsed.resumeData!.certifications || [])]
-        }));
-      }
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [messages, isLoading]);
-
-  const handleReset = () => {
-    if (confirm('Are you sure you want to start a new resume? This will clear all current progress.')) {
-      setMessages([
-        {
-          id: '1',
-          role: 'assistant',
-          content: "Hello! I'm your AI Resume Assistant. Let's create an amazing resume together. What field are you in, and what kind of job are you targeting?",
-          timestamp: new Date(),
-        },
-      ]);
-      setResumeData(initialResumeData);
-      localStorage.removeItem('resumeChatMessages');
-      localStorage.removeItem('resumeData');
-    }
-  };
+  ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">AI Resume Generator</h1>
-              <p className="text-gray-600 mt-1">Build your perfect resume with AI assistance</p>
+    <div className="flex flex-col">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
+              Create Your Perfect Resume with{' '}
+              <br />
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                V Place
+              </span>
+            </h1>
+            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+              Transform your career profile into a professional resume that stands out. 
+              Powered by advanced AI to highlight your strengths and achievements.
+            </p>
+            <div className="mt-10 flex justify-center gap-4">
+              <SignInButton size="lg" />
+              <Button size="lg" variant="outline" asChild>
+                <Link href="#features">
+                  Learn More
+                </Link>
+              </Button>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                AI Assistant Online
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold sm:text-4xl">Why Choose Our AI Resume Builder</h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Everything you need to create a professional resume
+            </p>
+          </div>
+          <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature, index) => (
+              <div key={index} className="rounded-lg border bg-card p-6 shadow-sm">
+                <div className="mb-4 inline-flex rounded-lg bg-primary/10 p-3">
+                  {feature.icon}
+                </div>
+                <h3 className="text-xl font-semibold">{feature.title}</h3>
+                <p className="mt-2 text-muted-foreground">{feature.description}</p>
               </div>
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
-              >
-                New Resume
-              </button>
-            </div>
+            ))}
           </div>
         </div>
-      </header>
+      </section>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[600px]">
-          {/* Left Panel - Chat */}
-          <div className="h-full">
-            <ChatInterface
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              isLoading={isLoading}
-              onReset={handleReset}
-            />
-          </div>
-
-          {/* Right Panel - Resume Preview */}
-          <div className="h-full">
-            <ResumePreview
-              resumeData={resumeData}
-              isLoading={isLoading}
-            />
-          </div>
+      {/* CTA Section */}
+      <section className="px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-8 py-12 text-center">
+          <h2 className="text-3xl font-bold text-white sm:text-4xl">
+            Ready to land your dream job?
+          </h2>
+          <p className="mt-4 text-lg text-blue-100">
+            Join thousands of successful job seekers who used our AI Resume Builder
+          </p>
+          <SignInButton 
+            size="lg"
+            className="mt-8 bg-white text-blue-600 hover:bg-gray-100"
+            showArrow={true}
+          />
         </div>
-
-        {/* Tips */}
-        <div className="mt-8 p-6 bg-white rounded-xl shadow-sm border">
-          <h3 className="font-semibold text-gray-800 mb-4">💡 Tips for Best Results:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">Be Specific</h4>
-              <p className="text-sm text-blue-700">
-                Example: "I increased sales by 30% by implementing a new CRM system"
-              </p>
-            </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">Provide Structure</h4>
-              <p className="text-sm text-green-700">
-                Share: Job titles, companies, dates, responsibilities, and achievements
-              </p>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">Ask Directly</h4>
-              <p className="text-sm text-purple-700">
-                Try: "Generate a resume for a software engineer with 5 years of experience"
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t bg-white mt-8">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="text-center text-gray-600 text-sm">
-            <p>Your data is stored locally and never shared. The AI may make mistakes. Always verify your resume.</p>
-            <p className="mt-2">Using OpenRouter's OLMo 3 32B Think model with reasoning capabilities</p>
-          </div>
-        </div>
-      </footer>
+      </section>
     </div>
-  );
+  )
 }

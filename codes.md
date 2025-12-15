@@ -3,23 +3,36 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
+
 export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+  },
+
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+
   callbacks: {
+    async signIn({ account, profile }) {
+      if (!profile?.email) {
+        return false;
+      }
+      return true;
+    },
+
     async jwt({ token, account, profile }) {
       if (account && profile) {
-        token.id = profile.sub;
         token.email = profile.email;
         token.name = profile.name;
         token.picture = profile.image;
       }
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
         session.user.email = token.email as string;
@@ -29,16 +42,14 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+
   secret: process.env.NEXTAUTH_SECRET,
-  pages: {
-    signIn: '/',
-    error: '/',
-  },
 };
 
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
+
 
 ---
 
@@ -51,6 +62,13 @@ export async function POST(request: NextRequest) {
   try {
     const { messages, useReasoning = true } = await request.json();
 
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json(
+        { error: 'Messages array is required' },
+        { status: 400 }
+      );
+    }
+
     // Add system prompt if it's the first message
     const enhancedMessages = messages.length === 1 
       ? [{ role: 'system', content: resumeSystemPrompt }, ...messages]
@@ -59,14 +77,17 @@ export async function POST(request: NextRequest) {
     const aiResponse = await generateResumeContent(enhancedMessages, useReasoning);
     
     return NextResponse.json({
-      message: aiResponse.content,
+      message: aiResponse.content || '',
       reasoning_details: aiResponse.reasoning_details,
       role: 'assistant'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Chat API error:', error);
     return NextResponse.json(
-      { error: 'Failed to process chat request' },
+      { 
+        error: 'Failed to process chat request',
+        details: error.message || 'Unknown error'
+      },
       { status: 500 }
     );
   }
@@ -535,7 +556,19 @@ export default async function HomePage() {
 
 # app/resume/actions.ts
 
+'use server';
 
+export async function saveResumeData(data: any) {
+  // Implement resume saving logic here
+  console.log('Saving resume data:', data);
+  return { success: true };
+}
+
+export async function loadResumeData(id: string) {
+  // Implement resume loading logic here
+  console.log('Loading resume data for:', id);
+  return null;
+}
 
 ---
 
@@ -563,7 +596,7 @@ export default function Loading() {
 import { useState, useEffect, useCallback } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import ResumePreview from '@/components/ResumePreview';
-import { Message, ResumeData, PersonalInfo, ExperienceItem, EducationItem, SkillCategory, ProjectItem, CertificationItem } from '@/types';
+import { Message, ResumeData } from '@/types';
 import { parseAIResponse } from '@/lib/resume-parser';
 
 const initialResumeData: ResumeData = {
@@ -584,7 +617,6 @@ const initialResumeData: ResumeData = {
   certifications: [],
 };
 
-// ... rest of the file remains the same
 export default function ResumePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -629,53 +661,80 @@ export default function ResumePage() {
     }
   }, [messages, resumeData]);
 
-  const handleSendMessage = useCallback(async (content: string) => {// In your handleSendMessage function, update the fetch handling:
-const response = await fetch('/api/chat', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    messages: [...messages.map(m => ({ role: m.role, content: m.content })), userMessage],
-    useReasoning: true,
-  }),
-});
+  const handleSendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || isLoading) return;
 
-if (!response.ok) {
-  const errorText = await response.text();
-  throw new Error(`Failed to send message: ${response.status} ${errorText}`);
-}
+    setIsLoading(true);
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: content,
+      timestamp: new Date(),
+    };
 
-const data = await response.json();
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
 
-// Check if we have JSON data directly in the response
-let newResumeData = null;
-let aiMessageContent = data.message;
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          useReasoning: true,
+        }),
+      });
 
-if (data.json_data?.resumeData) {
-  // Use the JSON data directly
-  newResumeData = data.json_data.resumeData;
-  aiMessageContent = "I've updated your resume with the information you provided. Check the preview on the right!";
-} else {
-  // Try to parse JSON from the message content
-  const parsed = parseAIResponse(data.message);
-  if (parsed.resumeData) {
-    newResumeData = parsed.resumeData;
-  }
-}
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
+      }
 
-if (newResumeData) {
-  setResumeData(prev => ({
-    ...prev,
-    ...newResumeData,
-    personalInfo: { ...prev.personalInfo, ...newResumeData.personalInfo },
-    experience: [...prev.experience, ...(newResumeData.experience || [])],
-    education: [...prev.education, ...(newResumeData.education || [])],
-    skills: [...prev.skills, ...(newResumeData.skills || [])],
-    projects: [...prev.projects, ...(newResumeData.projects || [])],
-    certifications: [...prev.certifications, ...(newResumeData.certifications || [])]
-  }));
-}}, [messages, isLoading]);
+      const data = await response.json();
+      
+      // Parse the AI response
+      const parsed = parseAIResponse(data.message);
+      
+      // Add AI message to chat
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: parsed.message,
+        timestamp: new Date(),
+        reasoning_details: data.reasoning_details,
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      
+      // Update resume data if available
+      if (parsed.resumeData) {
+        setResumeData(prev => ({
+          ...prev,
+          personalInfo: { ...prev.personalInfo, ...parsed.resumeData!.personalInfo },
+          summary: parsed.resumeData!.summary || prev.summary,
+          experience: [...prev.experience, ...(parsed.resumeData!.experience || [])],
+          education: [...prev.education, ...(parsed.resumeData!.education || [])],
+          skills: [...prev.skills, ...(parsed.resumeData!.skills || [])],
+          projects: [...prev.projects, ...(parsed.resumeData!.projects || [])],
+          certifications: [...prev.certifications, ...(parsed.resumeData!.certifications || [])]
+        }));
+      }
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, isLoading]);
 
   const handleReset = () => {
     if (confirm('Are you sure you want to start a new resume? This will clear all current progress.')) {
@@ -3019,18 +3078,5 @@ export interface ResumeData {
   skills: SkillCategory[];
   projects: ProjectItem[];
   certifications: CertificationItem[];
-}
-
-// Add these missing types
-export interface GeneratedResume {
-  content: string;
-  suggestions?: string[];
-  generatedAt: string;
-}
-
-export interface AIResponse {
-  message: string;
-  reasoning_details?: any;
-  role: 'assistant';
 }
 

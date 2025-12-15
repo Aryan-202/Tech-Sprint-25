@@ -1,6 +1,6 @@
 "use client"
 
-import { useSession, signOut } from "next-auth/react"
+import { useSession, signIn, signOut } from "next-auth/react"
 import { User, LogOut, Settings } from "lucide-react"
 import Link from "next/link"
 
@@ -20,8 +20,11 @@ export function UserNav() {
 
   if (!session) {
     return (
-      <Button asChild variant="ghost">
-        <Link href="/api/auth/signin">Sign In</Link>
+      <Button 
+        onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+        variant="default"
+      >
+        Sign In with Google
       </Button>
     )
   }
