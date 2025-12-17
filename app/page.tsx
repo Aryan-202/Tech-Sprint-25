@@ -89,7 +89,7 @@ export default async function HomePage() {
 
       {/* CTA Section */}
       <section className="px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-8 py-12 text-center">
+        <div className="mx-auto max-w-4xl rounded-2xl bg-linear-to-r from-blue-500 to-purple-600 px-8 py-12 text-center">
           <h2 className="text-3xl font-bold text-white sm:text-4xl">
             Ready to land your dream job?
           </h2>
